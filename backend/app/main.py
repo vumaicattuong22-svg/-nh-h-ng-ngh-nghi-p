@@ -87,6 +87,10 @@ Khi dùng công cụ tìm kiếm để lấy thông tin tuyển sinh, học phí
 MAX_OUTPUT_TOKENS = max(8192, int(os.getenv("GEMINI_MAX_OUTPUT_TOKENS", "8192")))
 GEMINI_THINKING_BUDGET = int(os.getenv("GEMINI_THINKING_BUDGET", "2048"))
 GEMINI_DEEP_THINKING_BUDGET = int(os.getenv("GEMINI_DEEP_THINKING_BUDGET", "8192"))
+# Gemini 3 trở lên nhận thinking_level (minimal/low/medium/high) thay cho thinking_budget của bản 2.x.
+GEMINI_THINKING_LEVEL = os.getenv("GEMINI_THINKING_LEVEL", "low").strip().upper()
+GEMINI_DEEP_THINKING_LEVEL = os.getenv("GEMINI_DEEP_THINKING_LEVEL", "high").strip().upper()
+MODEL_MAJOR_PATTERN = re.compile(r"^gemini-(\d+)")
 TOP_TEN_REQUEST_PATTERN = re.compile(r"\btop\s*10\b|\b10\s+(?:nhóm\s+)?nghề\b", re.IGNORECASE)
 NUMBERED_ITEM_PATTERN = re.compile(r"(?m)^\s*(?:#{1,6}\s*)?(?:\*\*|__|\*)?\s*(10|[1-9])[.)]\s+")
 DEEP_REQUEST_PATTERN = re.compile(
@@ -94,11 +98,23 @@ DEEP_REQUEST_PATTERN = re.compile(
     re.IGNORECASE,
 )
 RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+MODEL_MISSING_STATUS = 404
+AUTH_STATUS = {401, 403}
+AUTH_REASONS = (
+    "API_KEY_INVALID",
+    "API KEY NOT VALID",
+    "API_KEY_SERVICE_BLOCKED",
+    "API_KEY_HTTP_REFERRER_BLOCKED",
+    "PERMISSION_DENIED",
+    "UNAUTHENTICATED",
+)
 COOLDOWN_SECONDS = int(os.getenv("GEMINI_COOLDOWN_SECONDS", "300"))
 REQUEST_TIMEOUT_MS = int(os.getenv("GEMINI_TIMEOUT_MS", "180000"))
 STREAM_STALL_SECONDS = int(os.getenv("GEMINI_STREAM_STALL_SECONDS", "25"))
 SEARCH_COOLDOWN_KEY = "google_search"
 cooldowns: dict[str, float] = {}
+# Lỗi gần nhất từ Gemini, để /api/health nói đúng nguyên nhân thay vì đoán mò.
+last_upstream_error: dict[str, object] = {}
 
 
 class StreamStalled(RuntimeError):
@@ -298,14 +314,27 @@ def start_cooldown(key: str) -> None:
     cooldowns[key] = time.monotonic() + COOLDOWN_SECONDS
 
 
-def request_config(deep: bool, with_search: bool) -> types.GenerateContentConfig:
+def thinking_config(model: str, deep: bool) -> types.ThinkingConfig:
+    """Gemini 3 trở lên chỉ nhận thinking_level; các model 2.x cũ vẫn dùng thinking_budget."""
+    major = MODEL_MAJOR_PATTERN.match(model.strip().lower())
+    if major is None or int(major.group(1)) >= 3:
+        return types.ThinkingConfig(
+            thinking_level=GEMINI_DEEP_THINKING_LEVEL if deep else GEMINI_THINKING_LEVEL,
+            include_thoughts=False,
+        )
+    return types.ThinkingConfig(
+        thinking_budget=GEMINI_DEEP_THINKING_BUDGET if deep else GEMINI_THINKING_BUDGET,
+        include_thoughts=False,
+    )
+
+
+def request_config(
+    model: str, deep: bool, with_search: bool, with_thinking: bool = True
+) -> types.GenerateContentConfig:
     return types.GenerateContentConfig(
         system_instruction=SYSTEM_PROMPT,
         max_output_tokens=MAX_OUTPUT_TOKENS,
-        thinking_config=types.ThinkingConfig(
-            thinking_budget=GEMINI_DEEP_THINKING_BUDGET if deep else GEMINI_THINKING_BUDGET,
-            include_thoughts=False,
-        ),
+        thinking_config=thinking_config(model, deep) if with_thinking else None,
         tools=[types.Tool(google_search=types.GoogleSearch())] if with_search else None,
         http_options=types.HttpOptions(timeout=REQUEST_TIMEOUT_MS),
     )
@@ -320,21 +349,63 @@ def request_attempts(deep: bool) -> list[tuple[str, types.GenerateContentConfig]
     attempts: list[tuple[str, types.GenerateContentConfig]] = []
     for model in models:
         if search:
-            attempts.append((model, request_config(deep, with_search=True)))
-        attempts.append((model, request_config(deep, with_search=False)))
+            attempts.append((model, request_config(model, deep, with_search=True)))
+        attempts.append((model, request_config(model, deep, with_search=False)))
+        # Lượt cuối bỏ luôn thinking_config, phòng khi model không nhận tham số này.
+        attempts.append(
+            (model, request_config(model, deep, with_search=False, with_thinking=False))
+        )
     return attempts
+
+
+def is_auth_error(exc: errors.APIError) -> bool:
+    """Key sai, hết hạn hoặc bị chặn: đổi model bao nhiêu lần cũng vô ích."""
+    if exc.code in AUTH_STATUS:
+        return True
+    text = f"{exc.status} {exc.message} {exc.details}".upper()
+    return any(reason in text for reason in AUTH_REASONS)
+
+
+def record_upstream_error(model: str, exc: errors.APIError) -> None:
+    """Giữ lại lỗi gần nhất để quản trị viên đọc được qua /api/health."""
+    last_upstream_error.clear()
+    last_upstream_error.update(
+        {
+            "model": model,
+            "code": exc.code,
+            "status": exc.status,
+            "message": (exc.message or "")[:300],
+            "at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+    )
 
 
 def note_failure(model: str, config: types.GenerateContentConfig, exc: errors.APIError) -> bool:
     """Ghi nhận lỗi và cho biết có nên thử tiếp lượt sau hay không."""
-    if config.tools is not None:
+    record_upstream_error(model, exc)
+    if is_auth_error(exc):
+        logger.error("Gemini từ chối GEMINI_API_KEY (%s %s): %s", exc.code, exc.status, exc.message)
+        return False
+    if config.tools is not None and exc.code not in RETRYABLE_STATUS:
         start_cooldown(SEARCH_COOLDOWN_KEY)
         logger.warning("Tạm tắt tìm kiếm Google cho Gemini: %s", exc.code)
+        return True
+    if exc.code == 400 and config.thinking_config is not None:
+        logger.warning(
+            "Model %s không nhận cấu hình thinking (%s); thử lại không kèm tham số này",
+            model,
+            exc.message,
+        )
         return True
     if exc.code in RETRYABLE_STATUS:
         start_cooldown(model)
         logger.warning("Gemini model %s tạm thời không dùng được: %s", model, exc.code)
         return True
+    if exc.code == MODEL_MISSING_STATUS:
+        start_cooldown(model)
+        logger.error("Không tìm thấy model Gemini %s, chuyển sang model dự phòng", model)
+        return True
+    logger.error("Gemini trả lỗi %s %s cho model %s: %s", exc.code, exc.status, model, exc.message)
     return False
 
 
@@ -460,10 +531,25 @@ def wants_complete_top_ten(req: ChatRequest) -> bool:
     )
 
 
-def overload_message(exc: errors.APIError) -> tuple[int, str]:
+def failure_message(exc: errors.APIError) -> tuple[int, str]:
+    """Nói đúng nguyên nhân: sai key, sai tên model hay hệ thống đang quá tải."""
+    if is_auth_error(exc):
+        return 503, (
+            "Chưa gọi được AI vì GEMINI_API_KEY không hợp lệ hoặc đã bị thu hồi. "
+            "Quản trị viên hãy tạo key mới tại https://aistudio.google.com/apikey "
+            "rồi cập nhật biến môi trường GEMINI_API_KEY."
+        )
     if exc.code in RETRYABLE_STATUS:
         return 503, "Hệ thống AI đang có nhiều người sử dụng. Vui lòng chờ khoảng 30 giây rồi gửi lại."
-    return 502, "AI chưa thể xử lý yêu cầu này. Vui lòng thử câu hỏi ngắn hơn hoặc chọn tệp khác."
+    if exc.code == MODEL_MISSING_STATUS:
+        return 503, (
+            "Không tìm thấy model Gemini đã cấu hình. Quản trị viên hãy kiểm tra lại "
+            "GEMINI_MODEL, GEMINI_DEEP_MODEL và GEMINI_FALLBACK_MODELS."
+        )
+    return 502, (
+        f"AI chưa thể xử lý yêu cầu này (mã lỗi {exc.code}). "
+        "Vui lòng thử lại sau hoặc báo cho quản trị viên kiểm tra /api/health."
+    )
 
 
 def ensure_ready(req: ChatRequest) -> None:
@@ -491,6 +577,7 @@ def health():
         "profile_context": True,
         "response_policy": "top10-complete-v2",
         "max_output_tokens": MAX_OUTPUT_TOKENS,
+        "last_upstream_error": last_upstream_error or None,
     }
 
 
@@ -504,7 +591,7 @@ def chat(req: ChatRequest):
         response = generate_chat_response(contents, deep=deep)
     except errors.APIError as exc:
         logger.exception("Gemini API request failed after fallback attempts")
-        status_code, detail = overload_message(exc)
+        status_code, detail = failure_message(exc)
         raise HTTPException(status_code=status_code, detail=detail) from exc
     except Exception as exc:
         logger.exception("Unexpected Gemini request failure")
@@ -552,7 +639,7 @@ def chat_stream(req: ChatRequest):
         except (errors.APIError, StreamStalled) as exc:
             logger.warning("Luồng trả lời bị ngắt: %s", exc)
             detail = (
-                overload_message(exc)[1]
+                failure_message(exc)[1]
                 if isinstance(exc, errors.APIError)
                 else "Hệ thống AI đang có nhiều người sử dụng. Vui lòng chờ khoảng 30 giây rồi gửi lại."
             )
