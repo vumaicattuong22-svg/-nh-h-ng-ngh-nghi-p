@@ -137,13 +137,6 @@
           <p class="external-source">Nguồn công cụ: <a href="${test.url}" target="_blank" rel="noopener noreferrer">${test.source} ↗</a></p>
           ${resultEntryMarkup(testId)}
         </section>
-        <details class="quiz-fallback" id="quiz-fallback">
-          <summary>
-            <strong>Không mở được bài trên trang ngoài?</strong>
-            <span>Làm bản rút gọn ngay trên website. Kết quả cũng được lưu vào hồ sơ.</span>
-          </summary>
-          <div id="quiz-body"><p>Đang tải câu hỏi...</p></div>
-        </details>
       `;
     }
 
@@ -325,49 +318,10 @@
       return `${date.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} ngày ${date.toLocaleDateString("vi-VN")}`;
     }
 
-    function showResults(quiz, testId, result, body, message = "") {
-      QuizEngine.renderResults(quiz, result, body);
-      const panel = body.querySelector(".results-panel");
-      if (message) {
-        const note = document.createElement("p");
-        note.className = "quiz-saved-note";
-        note.textContent = message;
-        panel.prepend(note);
-      }
-      const retake = document.createElement("button");
-      retake.type = "button";
-      retake.className = "btn btn-secondary";
-      retake.textContent = "Làm lại bài này";
-      retake.addEventListener("click", () => startQuiz(quiz, testId, body));
-      panel.querySelector(".result-actions").appendChild(retake);
-      body.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-
-    function startQuiz(quiz, testId, body) {
-      body.innerHTML = "";
-      const form = QuizEngine.renderQuiz(quiz, body);
-      form.addEventListener("submit", (e) => {
-        e.preventDefault();
-        const answers = QuizEngine.collectAnswers(quiz, form);
-        const result = quiz.scaleType === "likert5" ? QuizEngine.scoreLikert(quiz, answers) : QuizEngine.scoreBinary(quiz, answers);
-        const stored = QuizEngine.saveResult(testId, result);
-        renderSavedStatus(testId);
-        showResults(
-          quiz,
-          testId,
-          result,
-          body,
-          stored
-            ? "✓ Đã lưu kết quả vào Hồ sơ của tôi trên trình duyệt này."
-            : "Trình duyệt đang chặn lưu dữ liệu (có thể do chế độ ẩn danh), nên kết quả này chưa được lưu vào hồ sơ."
-        );
-      });
-    }
-
     function describeResult(result) {
       if (Array.isArray(result?.top)) return result.top.map((item, index) => `${index + 1}. ${item.name}`).join(" · ");
       if (result?.code) return `Mã ${result.code}`;
-      if (Array.isArray(result?.dimensions)) return `Nổi bật: ${result.dimensions.slice(0, 3).map((item) => item.name).join(", ")} (bản rút gọn trên web)`;
+      if (Array.isArray(result?.dimensions)) return `Nổi bật: ${result.dimensions.slice(0, 3).map((item) => item.name).join(", ")}`;
       return "";
     }
 
@@ -464,23 +418,6 @@
       renderSavedStatus(testId);
     }
 
-    function bindFallbackQuiz(testId) {
-      const fallback = document.getElementById("quiz-fallback");
-      const body = document.getElementById("quiz-body");
-      let loading = false;
-      fallback.addEventListener("toggle", async () => {
-        if (!fallback.open || loading || body.querySelector("#quiz-form, .results-panel")) return;
-        loading = true;
-        try {
-          startQuiz(await QuizEngine.loadQuiz(testId), testId, body);
-        } catch {
-          body.innerHTML = `<p>Không tải được bản rút gọn. Lưu ý: bạn cần chạy trang qua một máy chủ cục bộ (xem README.md) thay vì mở trực tiếp file, để trình duyệt cho phép tải dữ liệu JSON.</p>`;
-        } finally {
-          loading = false;
-        }
-      });
-    }
-
     function main() {
       const params = new URLSearchParams(window.location.search);
       const testId = params.get("test");
@@ -494,7 +431,6 @@
 
       renderIntro(container);
       bindResultEntry(testId);
-      bindFallbackQuiz(testId);
     }
     main();
   </script>
