@@ -1,5 +1,6 @@
 const SITE_ORIGINS = [
   "https://dinh-huong-nghe-nghiep-ai.onrender.com",
+  "https://dinh-huong-nghe-nghiep-ai-yb49.onrender.com",
   "http://localhost:4173",
   "http://127.0.0.1:4173",
 ];

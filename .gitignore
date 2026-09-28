@@ -3,3 +3,4 @@ backend/.venv/
 **/__pycache__/
 *.pyc
 backend/server-*.log
+.wrangler/
