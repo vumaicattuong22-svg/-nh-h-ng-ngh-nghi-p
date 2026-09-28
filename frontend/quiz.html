@@ -56,11 +56,18 @@
 
   <script src="js/quiz-engine.js"></script>
   <script>
-    function assessmentPanelMarkup(name) {
+    function assessmentPanelMarkup(name, externalUrl, sourceName) {
       return `
         <section class="assessment-panel" aria-label="Làm trắc nghiệm ${name}">
           <span class="live-dot">Làm bài ngay trên website · kết quả tự lưu vào hồ sơ</span>
           <div id="quiz-body"><p>Đang tải câu hỏi...</p></div>
+          <aside class="external-reference">
+            <div>
+              <strong>Tham khảo thêm: bài trắc nghiệm ${name} trên ${sourceName}</strong>
+              <p>Bạn có thể làm thêm phiên bản của ${sourceName} để so sánh. Kết quả làm ở trang ngoài không tự lưu vào Hồ sơ của tôi.</p>
+            </div>
+            <a class="btn btn-secondary" href="${externalUrl}" target="_blank" rel="noopener noreferrer">Mở ${sourceName} ↗</a>
+          </aside>
         </section>
       `;
     }
@@ -87,7 +94,7 @@
             <article class="riasec-type type-c"><b>C</b><strong>Nghiệp vụ</strong><small>Conventional</small></article>
           </div>
         </div>
-        ${assessmentPanelMarkup("Holland")}
+        ${assessmentPanelMarkup("Holland", "https://tracnghiem.huongnghiepsongan.com/assess/tracnghiem/HLKPST1622", "Hướng nghiệp Sông An")}
       `;
     }
 
@@ -115,7 +122,7 @@
             <article class="mi-type mi-nature"><span>🌿</span><strong>Tự nhiên</strong><small>Naturalistic</small></article>
           </div>
         </div>
-        ${assessmentPanelMarkup("Đa trí thông minh (MI)")}
+        ${assessmentPanelMarkup("Đa trí thông minh (MI)", "https://tracnghiem.huongnghiepsongan.com/assess/tracnghiem/MIPQVI", "Hướng nghiệp Sông An")}
       `;
     }
 
@@ -145,7 +152,7 @@
             </div>
           </div>
         </div>
-        ${assessmentPanelMarkup("MBTI")}
+        ${assessmentPanelMarkup("MBTI", "https://mbtitests.com/take-test/", "MBTITests.com")}
       `;
     }
 
@@ -177,7 +184,7 @@
             <div class="disc-center" aria-hidden="true">DISC</div>
           </div>
         </div>
-        ${assessmentPanelMarkup("DISC")}
+        ${assessmentPanelMarkup("DISC", "https://testfast.vn/disc", "TestFast.vn")}
       `;
     }
 
@@ -203,7 +210,7 @@
             <article class="motive-type motive-growth"><span>🌱</span><strong>Phát triển</strong><small>Học hỏi và tiến bộ</small></article>
           </div>
         </div>
-        ${assessmentPanelMarkup("Động lực")}
+        ${assessmentPanelMarkup("Động lực", "https://junglemotives.com/free-quiz/", "Jungle Motives")}
       `;
     }
 
