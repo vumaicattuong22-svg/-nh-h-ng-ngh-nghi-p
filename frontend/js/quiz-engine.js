@@ -19,12 +19,15 @@ function renderQuiz(quiz, container) {
     <h2>${quiz.title}</h2>
     <p class="quiz-subtitle">${quiz.subtitle}</p>
     <p class="quiz-instructions">${quiz.instructions}</p>
+    <p class="quiz-tip">👆 Chọn đáp án xong, trang sẽ tự chuyển tới câu tiếp theo. Thanh ở cuối màn hình cho biết bạn đã làm được bao nhiêu câu.</p>
   `;
   container.appendChild(header);
 
   const form = document.createElement("form");
   form.id = "quiz-form";
   form.className = "quiz-form";
+  // Tự kiểm tra câu còn trống để đưa học sinh tới đúng câu đó, thay cho bong bóng lỗi nhỏ của trình duyệt.
+  form.noValidate = true;
 
   if (quiz.scaleType === "likert5") {
     quiz.questions.forEach((q, i) => form.appendChild(renderLikertQuestion(q, i, quiz.scaleLabels)));
@@ -32,30 +35,71 @@ function renderQuiz(quiz, container) {
     quiz.questions.forEach((q, i) => form.appendChild(renderBinaryQuestion(q, i)));
   }
 
-  const progress = document.createElement("div");
-  progress.className = "quiz-progress";
-  progress.innerHTML = `<div class="quiz-progress-bar" id="quiz-progress-bar"></div>`;
-  container.appendChild(progress);
-
+  // Thanh tiến độ và nút nộp bài luôn nằm ở cuối màn hình trong lúc làm bài.
   const submitWrap = document.createElement("div");
   submitWrap.className = "quiz-submit-wrap";
   submitWrap.innerHTML = `
-    <p id="quiz-remaining" class="quiz-remaining"></p>
+    <div class="quiz-progress-info">
+      <p id="quiz-remaining" class="quiz-remaining" aria-live="polite"></p>
+      <div class="quiz-progress"><div class="quiz-progress-bar" id="quiz-progress-bar"></div></div>
+    </div>
     <button type="submit" class="btn btn-primary" id="quiz-submit-btn">Xem kết quả</button>
   `;
   form.appendChild(submitWrap);
 
   container.appendChild(form);
 
-  form.addEventListener("change", () => updateProgress(quiz, form));
+  // Chỉ tự chuyển câu khi chạm/bấm chuột; người dùng bàn phím dùng phím mũi tên sẽ không bị cuộn đi mất.
+  let pointerAnswer = false;
+  form.addEventListener("pointerdown", () => { pointerAnswer = true; });
+  form.addEventListener("keydown", () => { pointerAnswer = false; });
+
+  form.addEventListener("change", (event) => {
+    const question = event.target.closest(".quiz-question");
+    const firstAnswer = question && !question.classList.contains("is-answered");
+    updateProgress(quiz, form);
+    if (firstAnswer && pointerAnswer) goToNextQuestion(form, question);
+  });
+
+  // Chạy trước trình xử lý nộp bài của trang: còn câu trống thì dừng lại và đưa tới câu đó.
+  form.addEventListener("submit", (event) => {
+    const questions = Array.from(form.querySelectorAll(".quiz-question"));
+    const missing = questions.filter((q) => !q.classList.contains("is-answered"));
+    if (!missing.length) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const first = missing[0];
+    first.classList.remove("is-missing");
+    void first.offsetWidth; // chạy lại hiệu ứng nhấp nháy nếu bấm nhiều lần
+    first.classList.add("is-missing");
+    const remaining = document.getElementById("quiz-remaining");
+    if (remaining) remaining.textContent = `Còn ${missing.length} câu chưa trả lời. Đã đưa bạn tới câu ${questions.indexOf(first) + 1}.`;
+    scrollToQuestion(first);
+    first.querySelector("input")?.focus({ preventScroll: true });
+  });
+
   updateProgress(quiz, form);
 
   return form;
 }
 
+function scrollToQuestion(question) {
+  const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  question.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+}
+
+function goToNextQuestion(form, current) {
+  const questions = Array.from(form.querySelectorAll(".quiz-question"));
+  const index = questions.indexOf(current);
+  const unanswered = (q) => !q.classList.contains("is-answered");
+  const next = questions.slice(index + 1).find(unanswered) || questions.slice(0, index).find(unanswered);
+  if (next) window.setTimeout(() => scrollToQuestion(next), 250);
+}
+
 function renderLikertQuestion(q, index, scaleLabels) {
   const wrap = document.createElement("div");
   wrap.className = "quiz-question";
+  wrap.dataset.questionId = q.id;
   const options = scaleLabels
     .map(
       (label, i) => `
@@ -76,6 +120,7 @@ function renderLikertQuestion(q, index, scaleLabels) {
 function renderBinaryQuestion(q, index) {
   const wrap = document.createElement("div");
   wrap.className = "quiz-question";
+  wrap.dataset.questionId = q.id;
   wrap.innerHTML = `
     <p class="question-text"><span class="question-index">${index + 1}.</span></p>
     <div class="binary-choice">
@@ -94,14 +139,24 @@ function renderBinaryQuestion(q, index) {
 
 function updateProgress(quiz, form) {
   const total = quiz.questions.length;
-  const answered = quiz.questions.filter((q) => form.elements[q.id] && form.elements[q.id].value).length;
+  let answered = 0;
+  quiz.questions.forEach((q) => {
+    const isAnswered = Boolean(form.elements[q.id] && form.elements[q.id].value);
+    if (isAnswered) answered += 1;
+    const wrap = form.querySelector(`[data-question-id="${q.id}"]`);
+    if (!wrap) return;
+    wrap.classList.toggle("is-answered", isAnswered);
+    if (isAnswered) wrap.classList.remove("is-missing");
+  });
   const bar = document.getElementById("quiz-progress-bar");
   const remaining = document.getElementById("quiz-remaining");
+  const submit = document.getElementById("quiz-submit-btn");
   if (bar) bar.style.width = `${Math.round((answered / total) * 100)}%`;
   if (remaining) {
     remaining.textContent =
-      answered === total ? "Đã trả lời đủ tất cả câu hỏi." : `Đã trả lời ${answered}/${total} câu.`;
+      answered === total ? "Đã trả lời đủ! Bấm “Xem kết quả”." : `Đã trả lời ${answered}/${total} câu`;
   }
+  if (submit) submit.classList.toggle("is-ready", answered === total);
 }
 
 function collectAnswers(quiz, form) {
