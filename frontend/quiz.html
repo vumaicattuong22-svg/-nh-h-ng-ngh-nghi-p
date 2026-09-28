@@ -56,30 +56,121 @@
 
   <script src="js/quiz-engine.js"></script>
   <script>
-    function externalReferenceMarkup(name, externalUrl, sourceName) {
+    const MBTI_TYPES = ["ISTJ", "ISFJ", "INFJ", "INTJ", "ISTP", "ISFP", "INFP", "INTP", "ESTP", "ESFP", "ENFP", "ENTP", "ESTJ", "ESFJ", "ENFJ", "ENTJ"];
+    const MBTI_AXES = [
+      { name: "Hướng ngoại (E) - Hướng nội (I)", pair: ["E", "I"] },
+      { name: "Giác quan (S) - Trực giác (N)", pair: ["S", "N"] },
+      { name: "Lý trí (T) - Cảm xúc (F)", pair: ["T", "F"] },
+      { name: "Nguyên tắc (J) - Linh hoạt (P)", pair: ["J", "P"] },
+    ];
+
+    /*
+     * Trang trắc nghiệm bên ngoài chạy trong iframe khác nguồn nên website không đọc được kết quả.
+     * Học sinh chọn lại kết quả vừa nhận ở ô "Lưu kết quả", và website ghi vào hồ sơ như bài làm trên web.
+     */
+    const EXTERNAL_TESTS = {
+      holland: {
+        name: "Holland",
+        url: "https://tracnghiem.huongnghiepsongan.com/assess/tracnghiem/HLKPST1622",
+        source: "Hướng nghiệp Sông An",
+        pick: 3,
+        codeFromPicks: true,
+        prompt: "Xem bảng “Điểm số” ở phần Kết quả của Sông An, rồi chạm chọn 3 nhóm có điểm cao nhất theo thứ tự từ cao xuống thấp.",
+        options: [["R", "Kỹ thuật (R)"], ["I", "Nghiên cứu (I)"], ["A", "Nghệ thuật (A)"], ["S", "Xã hội (S)"], ["E", "Quản lý (E)"], ["C", "Nghiệp vụ (C)"]],
+      },
+      mi: {
+        name: "Đa trí thông minh (MI)",
+        url: "https://tracnghiem.huongnghiepsongan.com/assess/tracnghiem/MIPQVI",
+        source: "Hướng nghiệp Sông An",
+        pick: 3,
+        prompt: "Xem phần Kết quả của Sông An, rồi chạm chọn 3 loại trí thông minh có điểm cao nhất theo thứ tự từ cao xuống thấp.",
+        options: [["LING", "Ngôn ngữ"], ["LOGIC", "Logic – toán học"], ["SPAT", "Không gian"], ["MUSIC", "Âm nhạc"], ["BODY", "Vận động"], ["INTER", "Giao tiếp"], ["INTRA", "Nội tâm"], ["NATUR", "Tự nhiên"], ["SPIRIT", "Tâm linh"]],
+      },
+      mbti: {
+        name: "MBTI",
+        url: "https://mbtitests.com/take-test/",
+        source: "MBTITests.com",
+        pick: 1,
+        prompt: "Chạm chọn mã tính cách 4 chữ cái mà trang trắc nghiệm trả về cho bạn.",
+        options: MBTI_TYPES.map((type) => [type, type]),
+      },
+      disc: {
+        name: "DISC",
+        url: "https://testfast.vn/disc",
+        source: "TestFast.vn",
+        pick: 2,
+        codeFromPicks: true,
+        prompt: "Chạm chọn nhóm hành vi nổi bật nhất trong kết quả, và nhóm thứ hai nếu kết quả có.",
+        options: [["D", "Thống trị (D)"], ["I", "Ảnh hưởng (I)"], ["S", "Kiên định (S)"], ["C", "Tuân thủ (C)"]],
+      },
+      motivators: {
+        name: "Động lực",
+        url: "https://junglemotives.com/free-quiz/",
+        source: "Jungle Motives",
+        pick: 2,
+        prompt: "Chạm chọn con vật chính trong kết quả của bạn, và con vật thứ hai nếu kết quả có.",
+        options: [["BEAR", "🐻 Gấu (Bear) – cân bằng"], ["HORSE", "🐴 Ngựa (Horse) – gắn kết"], ["CAT", "🐆 Mèo rừng (Jungle Cat) – chiến lược"], ["MONKEY", "🐒 Khỉ (Monkey) – vui vẻ"]],
+      },
+    };
+
+    function externalAssessmentMarkup(testId) {
+      const test = EXTERNAL_TESTS[testId];
       return `
-        <aside class="external-reference">
-          <div>
-            <strong>Tham khảo thêm: bài trắc nghiệm ${name} trên ${sourceName}</strong>
-            <p>Bạn có thể làm thêm phiên bản của ${sourceName} để so sánh. Kết quả làm ở trang ngoài không tự lưu vào Hồ sơ của tôi.</p>
+        <section class="external-assessment" aria-labelledby="${testId}-assessment-title">
+          <div class="external-assessment-head">
+            <div>
+              <span class="live-dot">Công cụ trực tuyến · ${test.source}</span>
+              <h2 id="${testId}-assessment-title">Làm trắc nghiệm ${test.name}</h2>
+              <p><strong>Bước 1:</strong> làm bài trong khung bên dưới. Nếu khung hiển thị chưa đầy đủ, bạn có thể mở ở một tab riêng. <strong>Bước 2:</strong> khi có kết quả, chọn lại kết quả ở ô “Lưu kết quả vào hồ sơ” ngay dưới khung.</p>
+            </div>
+            <a class="btn btn-primary" href="${test.url}" target="_blank" rel="noopener noreferrer">Mở toàn màn hình ↗</a>
           </div>
-          <a class="btn btn-secondary" href="${externalUrl}" target="_blank" rel="noopener noreferrer">Mở ${sourceName} ↗</a>
-        </aside>
+          <div class="external-frame-wrap">
+            <iframe
+              class="external-assessment-frame"
+              src="${test.url}"
+              title="Trắc nghiệm ${test.name} của ${test.source}"
+              loading="lazy"
+              referrerpolicy="strict-origin-when-cross-origin"
+            ></iframe>
+          </div>
+          <p class="external-source">Nguồn công cụ: <a href="${test.url}" target="_blank" rel="noopener noreferrer">${test.source} ↗</a></p>
+          ${resultEntryMarkup(testId)}
+        </section>
+        <details class="quiz-fallback" id="quiz-fallback">
+          <summary>
+            <strong>Không mở được bài trên trang ngoài?</strong>
+            <span>Làm bản rút gọn ngay trên website. Kết quả cũng được lưu vào hồ sơ.</span>
+          </summary>
+          <div id="quiz-body"><p>Đang tải câu hỏi...</p></div>
+        </details>
       `;
     }
 
-    function assessmentPanelMarkup(name) {
+    function resultEntryMarkup(testId) {
+      const test = EXTERNAL_TESTS[testId];
+      const chips = test.options
+        .map(([code, label]) => `<button type="button" class="entry-chip" data-code="${code}" aria-pressed="false"><span class="entry-rank" aria-hidden="true"></span>${label}</button>`)
+        .join("");
       return `
-        <section class="assessment-panel" aria-label="Làm trắc nghiệm ${name}">
-          <span class="live-dot">Làm bài ngay trên website · kết quả tự lưu vào hồ sơ</span>
-          <div id="quiz-body"><p>Đang tải câu hỏi...</p></div>
-        </section>
+        <div class="result-entry" id="result-entry">
+          <div class="result-entry-head">
+            <span class="result-entry-step">Bước 2</span>
+            <h3>Lưu kết quả vào Hồ sơ của tôi</h3>
+            <p>${test.prompt}</p>
+          </div>
+          <div class="entry-chips ${test.pick === 1 ? "is-single" : ""}" role="group" aria-label="Kết quả trắc nghiệm ${test.name} của bạn">${chips}</div>
+          <p class="result-entry-status" id="result-entry-status" aria-live="polite"></p>
+          <div class="result-entry-actions">
+            <button type="button" class="btn btn-secondary" id="result-entry-clear">Chọn lại</button>
+            <button type="button" class="btn btn-primary" id="result-entry-save" disabled>Lưu kết quả</button>
+          </div>
+        </div>
       `;
     }
 
     function renderHollandIntro(container) {
       container.innerHTML = `
-        ${externalReferenceMarkup("Holland", "https://tracnghiem.huongnghiepsongan.com/assess/tracnghiem/HLKPST1622", "Hướng nghiệp Sông An")}
         <div class="theory-intro holland-intro">
           <div class="theory-copy holland-copy">
             <a class="back-link" href="assessments.html">← Quay lại danh sách bài trắc nghiệm</a>
@@ -100,13 +191,12 @@
             <article class="riasec-type type-c"><b>C</b><strong>Nghiệp vụ</strong><small>Conventional</small></article>
           </div>
         </div>
-        ${assessmentPanelMarkup("Holland")}
+        ${externalAssessmentMarkup("holland")}
       `;
     }
 
     function renderMIIntro(container) {
       container.innerHTML = `
-        ${externalReferenceMarkup("Đa trí thông minh (MI)", "https://tracnghiem.huongnghiepsongan.com/assess/tracnghiem/MIPQVI", "Hướng nghiệp Sông An")}
         <div class="theory-intro mi-intro">
           <div class="theory-copy mi-copy">
             <a class="back-link" href="assessments.html">← Quay lại danh sách bài trắc nghiệm</a>
@@ -129,14 +219,13 @@
             <article class="mi-type mi-nature"><span>🌿</span><strong>Tự nhiên</strong><small>Naturalistic</small></article>
           </div>
         </div>
-        ${assessmentPanelMarkup("Đa trí thông minh (MI)")}
+        ${externalAssessmentMarkup("mi")}
       `;
     }
 
     function renderMBTIIntro(container) {
       const mbtiTypes = ["ISTJ", "ISFJ", "INFJ", "INTJ", "ISTP", "ISFP", "INFP", "INTP", "ESTP", "ESFP", "ENFP", "ENTP", "ESTJ", "ESFJ", "ENFJ", "ENTJ"];
       container.innerHTML = `
-        ${externalReferenceMarkup("MBTI", "https://mbtitests.com/take-test/", "MBTITests.com")}
         <div class="theory-intro mbti-intro">
           <div class="theory-copy mbti-copy">
             <a class="back-link" href="assessments.html">← Quay lại danh sách bài trắc nghiệm</a>
@@ -160,13 +249,12 @@
             </div>
           </div>
         </div>
-        ${assessmentPanelMarkup("MBTI")}
+        ${externalAssessmentMarkup("mbti")}
       `;
     }
 
     function renderDISCIntro(container) {
       container.innerHTML = `
-        ${externalReferenceMarkup("DISC", "https://testfast.vn/disc", "TestFast.vn")}
         <div class="theory-intro disc-intro">
           <div class="theory-copy disc-copy">
             <a class="back-link" href="assessments.html">← Quay lại danh sách bài trắc nghiệm</a>
@@ -193,13 +281,12 @@
             <div class="disc-center" aria-hidden="true">DISC</div>
           </div>
         </div>
-        ${assessmentPanelMarkup("DISC")}
+        ${externalAssessmentMarkup("disc")}
       `;
     }
 
     function renderMotivatorsIntro(container) {
       container.innerHTML = `
-        ${externalReferenceMarkup("Động lực", "https://junglemotives.com/free-quiz/", "Jungle Motives")}
         <div class="theory-intro motivators-intro">
           <div class="theory-copy motivators-copy">
             <a class="back-link" href="assessments.html">← Quay lại danh sách bài trắc nghiệm</a>
@@ -220,7 +307,7 @@
             <article class="motive-type motive-growth"><span>🌱</span><strong>Phát triển</strong><small>Học hỏi và tiến bộ</small></article>
           </div>
         </div>
-        ${assessmentPanelMarkup("Động lực")}
+        ${externalAssessmentMarkup("motivators")}
       `;
     }
 
@@ -258,26 +345,13 @@
 
     function startQuiz(quiz, testId, body) {
       body.innerHTML = "";
-      const saved = QuizEngine.getResult(testId);
-      if (saved?.result) {
-        const note = document.createElement("div");
-        note.className = "quiz-saved-note";
-        note.innerHTML = `<span>✓ Bạn đã lưu kết quả bài này${saved.completedAt ? ` lúc ${formatSavedTime(saved.completedAt)}` : ""}. Làm lại bên dưới sẽ cập nhật kết quả mới.</span>`;
-        const viewSaved = document.createElement("button");
-        viewSaved.type = "button";
-        viewSaved.className = "btn btn-secondary";
-        viewSaved.textContent = "Xem kết quả đã lưu";
-        viewSaved.addEventListener("click", () => showResults(quiz, testId, saved.result, body));
-        note.appendChild(viewSaved);
-        body.appendChild(note);
-      }
-
       const form = QuizEngine.renderQuiz(quiz, body);
       form.addEventListener("submit", (e) => {
         e.preventDefault();
         const answers = QuizEngine.collectAnswers(quiz, form);
         const result = quiz.scaleType === "likert5" ? QuizEngine.scoreLikert(quiz, answers) : QuizEngine.scoreBinary(quiz, answers);
         const stored = QuizEngine.saveResult(testId, result);
+        renderSavedStatus(testId);
         showResults(
           quiz,
           testId,
@@ -290,7 +364,124 @@
       });
     }
 
-    async function main() {
+    function describeResult(result) {
+      if (Array.isArray(result?.top)) return result.top.map((item, index) => `${index + 1}. ${item.name}`).join(" · ");
+      if (result?.code) return `Mã ${result.code}`;
+      if (Array.isArray(result?.dimensions)) return `Nổi bật: ${result.dimensions.slice(0, 3).map((item) => item.name).join(", ")} (bản rút gọn trên web)`;
+      return "";
+    }
+
+    function setEntryStatus(message, saved = false) {
+      const status = document.getElementById("result-entry-status");
+      if (!status) return;
+      status.textContent = message;
+      status.classList.toggle("is-saved", saved);
+    }
+
+    function renderSavedStatus(testId) {
+      const saved = QuizEngine.getResult(testId);
+      if (!saved?.result) {
+        setEntryStatus("Chưa có kết quả bài này trong hồ sơ.");
+        return;
+      }
+      const when = saved.completedAt ? ` lúc ${formatSavedTime(saved.completedAt)}` : "";
+      setEntryStatus(`✓ Đã lưu vào hồ sơ${when}: ${describeResult(saved.result)}`, true);
+      const status = document.getElementById("result-entry-status");
+      const link = document.createElement("a");
+      link.href = "profile.html";
+      link.textContent = "Xem hồ sơ →";
+      status.append(" ", link);
+    }
+
+    function buildExternalResult(test, picks) {
+      if (test.pick === 1 && MBTI_TYPES.includes(picks[0])) {
+        const code = picks[0];
+        return { type: "binary_choice", source: test.source, code, breakdown: MBTI_AXES.map((axis, index) => ({ axis: axis.name, pair: axis.pair, result: code[index] })) };
+      }
+      const labels = Object.fromEntries(test.options);
+      const result = { type: "ranking", source: test.source, top: picks.map((code) => ({ code, name: labels[code] })) };
+      if (test.codeFromPicks) result.code = picks.join("");
+      return result;
+    }
+
+    function bindResultEntry(testId) {
+      const test = EXTERNAL_TESTS[testId];
+      const chips = Array.from(document.querySelectorAll("#result-entry .entry-chip"));
+      const saveButton = document.getElementById("result-entry-save");
+      const validCodes = test.options.map(([code]) => code);
+      let picks = [];
+
+      const render = () => {
+        chips.forEach((chip) => {
+          const rank = picks.indexOf(chip.dataset.code);
+          chip.setAttribute("aria-pressed", String(rank >= 0));
+          chip.querySelector(".entry-rank").textContent = rank >= 0 && test.pick > 1 ? String(rank + 1) : "";
+        });
+        saveButton.disabled = picks.length === 0;
+      };
+
+      chips.forEach((chip) => {
+        chip.addEventListener("click", () => {
+          const code = chip.dataset.code;
+          if (picks.includes(code)) {
+            picks = picks.filter((item) => item !== code);
+          } else if (test.pick === 1) {
+            picks = [code];
+          } else if (picks.length < test.pick) {
+            picks.push(code);
+          } else {
+            setEntryStatus(`Bạn đã chọn đủ ${test.pick} lựa chọn. Chạm vào một lựa chọn đã chọn để bỏ chọn.`);
+            return;
+          }
+          if (picks.length) setEntryStatus("Bấm “Lưu kết quả” để ghi vào hồ sơ.");
+          else renderSavedStatus(testId);
+          render();
+        });
+      });
+
+      document.getElementById("result-entry-clear").addEventListener("click", () => {
+        picks = [];
+        render();
+        renderSavedStatus(testId);
+      });
+
+      saveButton.addEventListener("click", () => {
+        if (!picks.length) return;
+        if (!QuizEngine.saveResult(testId, buildExternalResult(test, picks))) {
+          setEntryStatus("Trình duyệt đang chặn lưu dữ liệu (có thể do chế độ ẩn danh), nên kết quả chưa được lưu vào hồ sơ.");
+          return;
+        }
+        renderSavedStatus(testId);
+      });
+
+      // Mở lại trang thì hiện sẵn lựa chọn đã lưu từ trang ngoài.
+      const saved = QuizEngine.getResult(testId)?.result;
+      if (saved?.source === test.source) {
+        const savedCodes = Array.isArray(saved.top) ? saved.top.map((item) => item.code) : [saved.code];
+        picks = savedCodes.filter((code) => validCodes.includes(code)).slice(0, test.pick);
+      }
+      render();
+      renderSavedStatus(testId);
+    }
+
+    function bindFallbackQuiz(testId) {
+      const fallback = document.getElementById("quiz-fallback");
+      const body = document.getElementById("quiz-body");
+      let loading = false;
+      fallback.addEventListener("toggle", async () => {
+        if (!fallback.open || loading || body.querySelector("#quiz-form, .results-panel")) return;
+        loading = true;
+        try {
+          startQuiz(await QuizEngine.loadQuiz(testId), testId, body);
+        } catch {
+          body.innerHTML = `<p>Không tải được bản rút gọn. Lưu ý: bạn cần chạy trang qua một máy chủ cục bộ (xem README.md) thay vì mở trực tiếp file, để trình duyệt cho phép tải dữ liệu JSON.</p>`;
+        } finally {
+          loading = false;
+        }
+      });
+    }
+
+    function main() {
       const params = new URLSearchParams(window.location.search);
       const testId = params.get("test");
       const container = document.getElementById("quiz-container");
@@ -302,17 +493,8 @@
       }
 
       renderIntro(container);
-      const body = document.getElementById("quiz-body");
-
-      let quiz;
-      try {
-        quiz = await QuizEngine.loadQuiz(testId);
-      } catch (err) {
-        body.innerHTML = `<p>Không tải được bài test "${testId}". Lưu ý: bạn cần chạy trang qua một máy chủ cục bộ (xem README.md) thay vì mở trực tiếp file, để trình duyệt cho phép tải dữ liệu JSON.</p>`;
-        return;
-      }
-
-      startQuiz(quiz, testId, body);
+      bindResultEntry(testId);
+      bindFallbackQuiz(testId);
     }
     main();
   </script>

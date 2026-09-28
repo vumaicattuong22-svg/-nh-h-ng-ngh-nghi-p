@@ -241,6 +241,7 @@ function collectResultChartImages() {
 function buildPrintableProfile(chartImages = []) {
   const printEl = document.getElementById("print-profile");
   const mbtiResult = legacyResults.mbti?.result;
+  const rankings = rankingResults();
   const infoItems = [
     ["Sở thích môn học", formatSubjectPreferences(), true],
     ["Năng khiếu", profileState.talents],
@@ -265,7 +266,7 @@ function buildPrintableProfile(chartImages = []) {
       </div>
     </section>
     <section class="print-profile-section print-result-images-section">
-      <h2>Hình ảnh kết quả trắc nghiệm đã làm</h2>
+      <h2>Kết quả trắc nghiệm đã làm</h2>
       ${chartImages.length ? `
         <div class="print-result-images">
           ${chartImages.map((image, index) => `
@@ -275,7 +276,14 @@ function buildPrintableProfile(chartImages = []) {
             </figure>
           `).join("")}
         </div>
-      ` : "<p>Chưa có biểu đồ kết quả được lưu trên thiết bị này.</p>"}
+      ` : (rankings.length ? "" : "<p>Chưa có biểu đồ kết quả được lưu trên thiết bị này.</p>")}
+      ${rankings.map(([testId, payload]) => `
+        <div class="print-ranking-result">
+          <span>${TEST_LABELS[testId]}${payload.result.source ? ` · ${escapeHtml(payload.result.source)}` : ""}</span>
+          ${payload.result.code ? `<strong>${escapeHtml(payload.result.code)}</strong>` : ""}
+          <p>${payload.result.top.map((item, index) => `${index + 1}. ${escapeHtml(item.name)}`).join(" · ")}</p>
+        </div>
+      `).join("")}
       ${mbtiResult?.code ? `
         <div class="print-mbti-result">
           <span>Kết quả MBTI</span>
@@ -364,14 +372,22 @@ function bindProfileActions() {
   });
 }
 
+function rankingResults() {
+  return TEST_IDS.filter((id) => Array.isArray(legacyResults[id]?.result?.top)).map((id) => [id, legacyResults[id]]);
+}
+
 function renderLegacySections() {
   const chartSection = document.getElementById("profile-chart-section");
   const mbtiSection = document.getElementById("profile-mbti-section");
   const likertResults = Object.entries(legacyResults).filter(([id, payload]) => id !== "mbti" && payload?.result?.dimensions);
+  const rankings = rankingResults();
+  const canDrawCharts = likertResults.length > 0 && typeof Chart !== "undefined";
 
-  if (likertResults.length > 0 && typeof Chart !== "undefined") {
+  if (canDrawCharts || rankings.length) {
     chartSection.style.display = "";
-    renderRadarChart(likertResults);
+    document.getElementById("radar-grid").innerHTML = "";
+    if (canDrawCharts) renderRadarChart(likertResults);
+    renderRankingCards(rankings);
   }
   if (legacyResults.mbti?.result?.code) {
     mbtiSection.style.display = "";
@@ -379,10 +395,26 @@ function renderLegacySections() {
   }
 }
 
+/* Kết quả chép lại từ trang trắc nghiệm bên ngoài: các nhóm nổi bật theo thứ tự. */
+function renderRankingCards(rankings) {
+  const grid = document.getElementById("radar-grid");
+  rankings.forEach(([testId, payload]) => {
+    const { code, top, source } = payload.result;
+    const card = document.createElement("div");
+    card.className = "radar-card";
+    card.innerHTML = `
+      <h3>${TEST_LABELS[testId]}</h3>
+      ${code ? `<p class="ranking-code">${escapeHtml(code)}</p>` : ""}
+      <ol class="ranking-list">${top.map((item) => `<li>${escapeHtml(item.name)}</li>`).join("")}</ol>
+      ${source ? `<p class="result-source">Nguồn: ${escapeHtml(source)}</p>` : ""}
+    `;
+    grid.appendChild(card);
+  });
+}
+
 function renderRadarChart(likertResults) {
   const colors = ["#4f46e5", "#0891b2", "#c2410c", "#15803d"];
   const grid = document.getElementById("radar-grid");
-  grid.innerHTML = "";
   likertResults.forEach(([testId, payload], index) => {
     const card = document.createElement("div");
     card.className = "radar-card";
@@ -401,7 +433,8 @@ function renderRadarChart(likertResults) {
 function renderMbtiBadge(payload) {
   const el = document.getElementById("mbti-badge");
   const breakdown = Array.isArray(payload.result.breakdown) ? payload.result.breakdown : [];
-  el.innerHTML = `<div class="mbti-code">${escapeHtml(payload.result.code)}</div><div class="mbti-breakdown">${breakdown.map((item) => `<div>${escapeHtml(item.axis)}: <strong>${escapeHtml(item.result)}</strong></div>`).join("")}</div>`;
+  const source = payload.result.source ? `<p class="result-source">Nguồn: ${escapeHtml(payload.result.source)}</p>` : "";
+  el.innerHTML = `<div class="mbti-code">${escapeHtml(payload.result.code)}</div><div class="mbti-breakdown">${breakdown.map((item) => `<div>${escapeHtml(item.axis)}: <strong>${escapeHtml(item.result)}</strong></div>`).join("")}</div>${source}`;
 }
 
 function initProfilePage() {

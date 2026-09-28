@@ -217,6 +217,13 @@ function readJson(key) {
 function quizHighlights(payload) {
   const result = payload?.result;
   if (!result) return null;
+  // Kết quả chép lại từ trang trắc nghiệm bên ngoài: các nhóm nổi bật theo thứ tự.
+  if (Array.isArray(result.top)) {
+    return {
+      code: result.code ? String(result.code) : "",
+      highlights: result.top.slice(0, 3).map((item, index) => `Nổi bật thứ ${index + 1}: ${item.name}`),
+    };
+  }
   if (Array.isArray(result.dimensions)) {
     return {
       code: "",
