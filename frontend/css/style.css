@@ -77,7 +77,9 @@ a:hover { text-decoration: underline; }
 }
 .site-logo-mark { width: 31px; height: 31px; display: block; flex: 0 0 auto; padding: 1px; border: 1px solid rgba(57,157,55,.2); border-radius: 50%; background: #fff; object-fit: cover; box-shadow: 0 5px 13px rgba(25,75,40,.12); }
 .site-logo:hover { text-decoration: none; }
-.site-nav { display: flex; flex: 1 1 auto; align-items: center; justify-content: flex-end; gap: clamp(12px, 1.25vw, 20px); min-width: 0; flex-wrap: nowrap; }
+.site-nav { display: flex; flex: 1 1 auto; align-items: center; gap: clamp(12px, 1.25vw, 20px); min-width: 0; flex-wrap: nowrap; }
+/* Đẩy menu sang phải bằng margin thay vì justify-content: flex-end, để khi thiếu chỗ các mục tràn sang phải (kéo được) chứ không mất bên trái. */
+.site-nav > :first-child { margin-left: auto; }
 .site-nav > a { white-space: nowrap; }
 .site-nav a { color: var(--color-text-muted); font-weight: 600; position: relative; padding: 7px 0; }
 .site-nav a::after { content: ""; position: absolute; left: 0; right: 100%; bottom: 0; height: 2px; border-radius: 2px; background: linear-gradient(90deg, var(--color-primary), var(--color-secondary)); transition: right 0.25s ease; }
@@ -963,6 +965,21 @@ input:focus, select:focus { outline: 3px solid rgba(91,76,240,.14); border-color
   .quiz-question:hover { transform: none; box-shadow: 0 8px 30px rgba(52,61,120,.07); }
 }
 
+/* Màn hình chưa đủ rộng cho logo + menu trên một hàng: menu xuống hàng riêng, kéo ngang được, không đè lên logo. */
+@media (max-width: 1320px) {
+  html { scroll-padding-top: 140px; }
+  .site-header .container { position: relative; flex-wrap: wrap; row-gap: 8px; }
+  .site-nav { order: 3; flex: 1 1 100%; overflow-x: auto; overscroll-behavior-x: contain; padding-bottom: 4px; scrollbar-width: thin; }
+  /* Căn giữa khi đủ chỗ; khi thiếu chỗ margin tự về 0 nên menu bắt đầu từ "Trang chủ". */
+  .site-nav > :last-child { margin-right: auto; }
+  /* Menu xổ xuống bám theo khung header (không nằm trong vùng kéo ngang) nên không bị cắt. */
+  .site-nav-dropdown { position: static; }
+  .site-nav-menu,
+  .site-nav-dropdown:last-child .site-nav-menu { top: calc(100% + 2px); right: 16px; left: auto; width: min(390px, calc(100% - 32px)); translate: 0 0; }
+  .site-nav-menu::before { display: none; }
+  .profile-glance { top: 140px; }
+}
+
 @media (max-width: 640px) {
   html { scroll-padding-top: 130px; }
   .quiz-question { padding: 16px 14px; }
@@ -983,13 +1000,10 @@ input:focus, select:focus { outline: 3px solid rgba(91,76,240,.14); border-color
   .experience-carousel-status { grid-template-columns: 1fr auto; }
   .experience-carousel-hint { display: none; }
   .experience-highlights { justify-content: flex-start; margin-top: -10px; }
-  .site-header .container { align-items: flex-start; flex-wrap: wrap; gap: 10px; }
-  .site-nav { width: 100%; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; gap: 18px; }
+  .site-header .container { align-items: flex-start; gap: 10px; }
+  .site-nav { gap: 18px; }
   .site-nav a { white-space: nowrap; font-size: .88rem; }
-  .site-nav:has(.site-nav-dropdown[open]) { overflow: visible; }
   .site-nav-dropdown summary { font-size: .88rem; }
-  .site-nav-menu { right: 0; left: auto; translate: 0 0; }
-  .site-nav-menu::before { right: 28px; left: auto; transform: rotate(45deg); }
   .theme-toggle { position: absolute; right: 18px; top: 10px; }
   .footer-team { flex-direction: column; }
   .footer-credit { width: 100%; }

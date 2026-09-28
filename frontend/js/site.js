@@ -26,6 +26,15 @@
     headerContainer.appendChild(themeButton);
   }
 
+  // Menu kéo ngang trên màn hình hẹp: đưa mục của trang đang xem vào giữa để không bị khuất.
+  const siteNav = document.querySelector(".site-nav");
+  const activeNavItem = siteNav?.querySelector("a.active, summary.active");
+  if (siteNav && activeNavItem && siteNav.scrollWidth > siteNav.clientWidth) {
+    const navBox = siteNav.getBoundingClientRect();
+    const itemBox = activeNavItem.getBoundingClientRect();
+    siteNav.scrollLeft += itemBox.left - navBox.left - (navBox.width - itemBox.width) / 2;
+  }
+
   const navDropdowns = Array.from(document.querySelectorAll(".site-nav-dropdown"));
   navDropdowns.forEach((dropdown) => {
     dropdown.addEventListener("toggle", () => {
