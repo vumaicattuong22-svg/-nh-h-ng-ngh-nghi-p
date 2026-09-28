@@ -16,7 +16,7 @@ function renderQuiz(quiz, container) {
   const header = document.createElement("div");
   header.className = "quiz-header";
   header.innerHTML = `
-    <h1>${quiz.title}</h1>
+    <h2>${quiz.title}</h2>
     <p class="quiz-subtitle">${quiz.subtitle}</p>
     <p class="quiz-instructions">${quiz.instructions}</p>
   `;
@@ -212,12 +212,22 @@ function renderResults(quiz, result, container) {
 
 function saveResult(testId, result) {
   const payload = { testId, result, completedAt: new Date().toISOString() };
-  localStorage.setItem(RESULT_PREFIX + testId, JSON.stringify(payload));
+  try {
+    localStorage.setItem(RESULT_PREFIX + testId, JSON.stringify(payload));
+    return true;
+  } catch {
+    // Trình duyệt chặn bộ nhớ (chế độ riêng tư, hết dung lượng): vẫn hiện kết quả nhưng không lưu được.
+    return false;
+  }
 }
 
 function getResult(testId) {
-  const raw = localStorage.getItem(RESULT_PREFIX + testId);
-  return raw ? JSON.parse(raw) : null;
+  try {
+    const raw = localStorage.getItem(RESULT_PREFIX + testId);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
 }
 
 function getAllResults() {

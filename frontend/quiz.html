@@ -56,33 +56,16 @@
 
   <script src="js/quiz-engine.js"></script>
   <script>
-    function externalAssessmentMarkup(id, name, url) {
+    function assessmentPanelMarkup(name) {
       return `
-        <section class="external-assessment" aria-labelledby="${id}-assessment-title">
-          <div class="external-assessment-head">
-            <div>
-              <span class="live-dot">Công cụ trực tuyến</span>
-              <h2 id="${id}-assessment-title">Làm trắc nghiệm ${name}</h2>
-              <p>Thực hiện bài trắc nghiệm ngay trong khung bên dưới. Nếu khung hiển thị chưa đầy đủ, bạn có thể mở công cụ ở một tab riêng.</p>
-            </div>
-            <a class="btn btn-primary" href="${url}" target="_blank" rel="noopener noreferrer">Mở toàn màn hình ↗</a>
-          </div>
-          <div class="external-frame-wrap">
-            <iframe
-              class="external-assessment-frame"
-              src="${url}"
-              title="Trắc nghiệm ${name} của Hướng nghiệp Sông An"
-              loading="lazy"
-              referrerpolicy="strict-origin-when-cross-origin"
-            ></iframe>
-          </div>
-          <p class="external-source">Nguồn công cụ: <a href="${url}" target="_blank" rel="noopener noreferrer">Hướng nghiệp Sông An ↗</a></p>
+        <section class="assessment-panel" aria-label="Làm trắc nghiệm ${name}">
+          <span class="live-dot">Làm bài ngay trên website · kết quả tự lưu vào hồ sơ</span>
+          <div id="quiz-body"><p>Đang tải câu hỏi...</p></div>
         </section>
       `;
     }
 
-    function renderHollandExternal(container) {
-      const hollandUrl = "https://tracnghiem.huongnghiepsongan.com/assess/tracnghiem/HLKPST1622";
+    function renderHollandIntro(container) {
       container.innerHTML = `
         <div class="theory-intro holland-intro">
           <div class="theory-copy holland-copy">
@@ -104,12 +87,11 @@
             <article class="riasec-type type-c"><b>C</b><strong>Nghiệp vụ</strong><small>Conventional</small></article>
           </div>
         </div>
-        ${externalAssessmentMarkup("holland", "Holland", hollandUrl)}
+        ${assessmentPanelMarkup("Holland")}
       `;
     }
 
-    function renderMIExternal(container) {
-      const miUrl = "https://tracnghiem.huongnghiepsongan.com/assess/tracnghiem/MIPQVI";
+    function renderMIIntro(container) {
       container.innerHTML = `
         <div class="theory-intro mi-intro">
           <div class="theory-copy mi-copy">
@@ -133,12 +115,11 @@
             <article class="mi-type mi-nature"><span>🌿</span><strong>Tự nhiên</strong><small>Naturalistic</small></article>
           </div>
         </div>
-        ${externalAssessmentMarkup("mi", "Đa trí thông minh (MI)", miUrl)}
+        ${assessmentPanelMarkup("Đa trí thông minh (MI)")}
       `;
     }
 
-    function renderMBTIExternal(container) {
-      const mbtiUrl = "https://mbtitests.com/take-test/";
+    function renderMBTIIntro(container) {
       const mbtiTypes = ["ISTJ", "ISFJ", "INFJ", "INTJ", "ISTP", "ISFP", "INFP", "INTP", "ESTP", "ESFP", "ENFP", "ENTP", "ESTJ", "ESFJ", "ENFJ", "ENTJ"];
       container.innerHTML = `
         <div class="theory-intro mbti-intro">
@@ -164,12 +145,11 @@
             </div>
           </div>
         </div>
-        ${externalAssessmentMarkup("mbti", "MBTI", mbtiUrl)}
+        ${assessmentPanelMarkup("MBTI")}
       `;
     }
 
-    function renderDISCExternal(container) {
-      const discUrl = "https://testfast.vn/disc";
+    function renderDISCIntro(container) {
       container.innerHTML = `
         <div class="theory-intro disc-intro">
           <div class="theory-copy disc-copy">
@@ -197,12 +177,11 @@
             <div class="disc-center" aria-hidden="true">DISC</div>
           </div>
         </div>
-        ${externalAssessmentMarkup("disc", "DISC", discUrl)}
+        ${assessmentPanelMarkup("DISC")}
       `;
     }
 
-    function renderMotivatorsExternal(container) {
-      const motivatorsUrl = "https://junglemotives.com/free-quiz/";
+    function renderMotivatorsIntro(container) {
       container.innerHTML = `
         <div class="theory-intro motivators-intro">
           <div class="theory-copy motivators-copy">
@@ -224,8 +203,74 @@
             <article class="motive-type motive-growth"><span>🌱</span><strong>Phát triển</strong><small>Học hỏi và tiến bộ</small></article>
           </div>
         </div>
-        ${externalAssessmentMarkup("motivators", "Động lực", motivatorsUrl)}
+        ${assessmentPanelMarkup("Động lực")}
       `;
+    }
+
+    const INTRO_RENDERERS = {
+      holland: renderHollandIntro,
+      mi: renderMIIntro,
+      mbti: renderMBTIIntro,
+      disc: renderDISCIntro,
+      motivators: renderMotivatorsIntro,
+    };
+
+    function formatSavedTime(isoString) {
+      const date = new Date(isoString);
+      if (Number.isNaN(date.getTime())) return "";
+      return `${date.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} ngày ${date.toLocaleDateString("vi-VN")}`;
+    }
+
+    function showResults(quiz, testId, result, body, message = "") {
+      QuizEngine.renderResults(quiz, result, body);
+      const panel = body.querySelector(".results-panel");
+      if (message) {
+        const note = document.createElement("p");
+        note.className = "quiz-saved-note";
+        note.textContent = message;
+        panel.prepend(note);
+      }
+      const retake = document.createElement("button");
+      retake.type = "button";
+      retake.className = "btn btn-secondary";
+      retake.textContent = "Làm lại bài này";
+      retake.addEventListener("click", () => startQuiz(quiz, testId, body));
+      panel.querySelector(".result-actions").appendChild(retake);
+      body.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function startQuiz(quiz, testId, body) {
+      body.innerHTML = "";
+      const saved = QuizEngine.getResult(testId);
+      if (saved?.result) {
+        const note = document.createElement("div");
+        note.className = "quiz-saved-note";
+        note.innerHTML = `<span>✓ Bạn đã lưu kết quả bài này${saved.completedAt ? ` lúc ${formatSavedTime(saved.completedAt)}` : ""}. Làm lại bên dưới sẽ cập nhật kết quả mới.</span>`;
+        const viewSaved = document.createElement("button");
+        viewSaved.type = "button";
+        viewSaved.className = "btn btn-secondary";
+        viewSaved.textContent = "Xem kết quả đã lưu";
+        viewSaved.addEventListener("click", () => showResults(quiz, testId, saved.result, body));
+        note.appendChild(viewSaved);
+        body.appendChild(note);
+      }
+
+      const form = QuizEngine.renderQuiz(quiz, body);
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const answers = QuizEngine.collectAnswers(quiz, form);
+        const result = quiz.scaleType === "likert5" ? QuizEngine.scoreLikert(quiz, answers) : QuizEngine.scoreBinary(quiz, answers);
+        const stored = QuizEngine.saveResult(testId, result);
+        showResults(
+          quiz,
+          testId,
+          result,
+          body,
+          stored
+            ? "✓ Đã lưu kết quả vào Hồ sơ của tôi trên trình duyệt này."
+            : "Trình duyệt đang chặn lưu dữ liệu (có thể do chế độ ẩn danh), nên kết quả này chưa được lưu vào hồ sơ."
+        );
+      });
     }
 
     async function main() {
@@ -233,54 +278,24 @@
       const testId = params.get("test");
       const container = document.getElementById("quiz-container");
 
-      if (!testId) {
-        container.innerHTML = `<p>Thiếu tham số bài test. Hãy quay lại <a href="assessments.html">danh sách bài trắc nghiệm</a>.</p>`;
+      const renderIntro = Object.prototype.hasOwnProperty.call(INTRO_RENDERERS, testId || "") ? INTRO_RENDERERS[testId] : null;
+      if (!renderIntro) {
+        container.innerHTML = `<p>Không tìm thấy bài trắc nghiệm. Hãy quay lại <a href="assessments.html">danh sách bài trắc nghiệm</a>.</p>`;
         return;
       }
 
-      if (testId === "holland") {
-        renderHollandExternal(container);
-        return;
-      }
-
-      if (testId === "mi") {
-        renderMIExternal(container);
-        return;
-      }
-
-      if (testId === "mbti") {
-        renderMBTIExternal(container);
-        return;
-      }
-
-      if (testId === "disc") {
-        renderDISCExternal(container);
-        return;
-      }
-
-      if (testId === "motivators") {
-        renderMotivatorsExternal(container);
-        return;
-      }
+      renderIntro(container);
+      const body = document.getElementById("quiz-body");
 
       let quiz;
       try {
         quiz = await QuizEngine.loadQuiz(testId);
       } catch (err) {
-        container.innerHTML = `<p>Không tải được bài test "${testId}". Lưu ý: bạn cần chạy trang qua một máy chủ cục bộ (xem README.md) thay vì mở trực tiếp file, để trình duyệt cho phép tải dữ liệu JSON.</p>`;
+        body.innerHTML = `<p>Không tải được bài test "${testId}". Lưu ý: bạn cần chạy trang qua một máy chủ cục bộ (xem README.md) thay vì mở trực tiếp file, để trình duyệt cho phép tải dữ liệu JSON.</p>`;
         return;
       }
 
-      container.innerHTML = "";
-      const form = QuizEngine.renderQuiz(quiz, container);
-
-      form.addEventListener("submit", (e) => {
-        e.preventDefault();
-        const answers = QuizEngine.collectAnswers(quiz, form);
-        const result = quiz.scaleType === "likert5" ? QuizEngine.scoreLikert(quiz, answers) : QuizEngine.scoreBinary(quiz, answers);
-        QuizEngine.saveResult(testId, result);
-        QuizEngine.renderResults(quiz, result, container);
-      });
+      startQuiz(quiz, testId, body);
     }
     main();
   </script>

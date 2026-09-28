@@ -198,7 +198,7 @@ function renderProfileSummary() {
 
 function renderStatus(completed, el) {
   if (!completed.length) {
-    el.innerHTML = "<p>Chưa có kết quả trắc nghiệm được lưu trên thiết bị này.</p>";
+    el.innerHTML = '<p>Chưa có kết quả trắc nghiệm được lưu trên thiết bị này. <a href="assessments.html">Làm bài trắc nghiệm →</a></p>';
     return;
   }
   const doneList = completed.map((id) => `<span class="badge badge-done">${TEST_LABELS[id]}</span>`).join(" ");
